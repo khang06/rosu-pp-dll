@@ -1,0 +1,7 @@
+[build]
+target = "i686-pc-windows-msvc"
+rustflags = ["-C", "link-args=/SUBSYSTEM:CONSOLE,5.01"]
+
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+build-std-features = ["compiler-builtins-mem"]
