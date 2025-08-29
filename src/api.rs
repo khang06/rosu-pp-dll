@@ -16,22 +16,68 @@ pub extern "C" fn rosu_pp_free(map: *mut Beatmap) {
 pub extern "C" fn rosu_pp_convert(map: *mut Beatmap, mode: u8, mods: u32) -> bool {
     unsafe {
         let map = &mut *map;
-        let mode = GameMode::from(mode);
-        let mods = GameMods::from(mods);
-        map.convert_mut(mode, &mods).is_ok()
+        map.convert_mut(GameMode::from(mode), &GameMods::from(mods))
+            .is_ok()
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn rosu_pp_get_stars(map: *mut Beatmap, mods: u32, pp: *mut f64) -> f64 {
+pub extern "C" fn rosu_pp_get_stars(map: *mut Beatmap, mods: u32) -> f64 {
     let map = unsafe { &mut *map };
-    let diff_attrs = rosu_pp::Difficulty::new().mods(mods).calculate(&map);
-    let stars = diff_attrs.stars();
+    let diff_attrs = rosu_pp::Difficulty::new()
+        .mods(mods)
+        .lazer(false)
+        .calculate(&map);
 
-    if let Some(pp) = unsafe { pp.as_mut() } {
-        let difficulty = diff_attrs.performance().mods(mods).calculate();
-        *pp = difficulty.pp();
+    diff_attrs.stars()
+}
+
+#[repr(C)]
+pub struct RosuPPSummary {
+    max_combo: u32,
+    pp100: f64,
+    pp98: f64,
+    pp95: f64,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_get_pp_summary(
+    map: *mut Beatmap,
+    mods: u32,
+    summary: *mut RosuPPSummary,
+) {
+    let map = unsafe { &mut *map };
+    let diff_attrs = rosu_pp::Difficulty::new()
+        .mods(mods)
+        .lazer(false)
+        .calculate(&map);
+    let max_combo = diff_attrs.max_combo();
+
+    let mut perf_attrs = diff_attrs.performance().mods(mods).lazer(false).calculate();
+    let pp100 = perf_attrs.pp();
+
+    perf_attrs = perf_attrs
+        .performance()
+        .mods(mods)
+        .lazer(false)
+        .accuracy(98.0)
+        .calculate();
+    let pp98 = perf_attrs.pp();
+
+    perf_attrs = perf_attrs
+        .performance()
+        .mods(mods)
+        .lazer(false)
+        .accuracy(95.0)
+        .calculate();
+    let pp95 = perf_attrs.pp();
+
+    unsafe {
+        *summary = RosuPPSummary {
+            max_combo,
+            pp100,
+            pp98,
+            pp95,
+        };
     }
-
-    stars
 }
