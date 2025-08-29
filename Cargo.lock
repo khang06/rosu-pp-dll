@@ -63,15 +63,8 @@ name = "rosu-pp-dll"
 version = "0.1.0"
 dependencies = [
  "rosu-pp",
- "vc-ltl",
  "windows-sys",
 ]
-
-[[package]]
-name = "vc-ltl"
-version = "5.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "952e87999b59993e0bd8a02c65abff374daf3f44a1643c414f93dbab6d03c052"
 
 [[package]]
 name = "windows-link"

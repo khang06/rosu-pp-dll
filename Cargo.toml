@@ -13,7 +13,6 @@ windows-sys = { version = "0.60.2", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 rosu-pp = { path = "../rosu-pp" }
-vc-ltl = "5.2.2"
 
 [profile.dev]
 panic = "abort"
