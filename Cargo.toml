@@ -1,6 +1,6 @@
 [package]
 name = "rosu-pp-dll"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -12,7 +12,7 @@ windows-sys = { version = "0.60.2", features = [
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
-rosu-pp = { path = "../rosu-pp" }
+rosu-pp = "3.1.0"
 
 [profile.dev]
 panic = "abort"

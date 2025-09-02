@@ -1,10 +1,12 @@
-use alloc::boxed::Box;
 use rosu_pp::{Beatmap, GameMods, model::mode::GameMode};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rosu_pp_parse(data: *const u8, len: usize) -> *mut Beatmap {
     let slice = unsafe { core::slice::from_raw_parts(data, len) };
-    Box::into_raw(Box::new(Beatmap::from_bytes(slice)))
+    let Ok(beatmap) = Beatmap::from_bytes(slice) else {
+        return std::ptr::null_mut();
+    };
+    Box::into_raw(Box::new(beatmap))
 }
 
 #[unsafe(no_mangle)]
