@@ -22,12 +22,12 @@ pub extern "C" fn rosu_pp_convert(map: *mut Beatmap, mode: u8, mods: u32) -> boo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn rosu_pp_get_stars(map: *mut Beatmap, mods: u32) -> f64 {
-    let map = unsafe { &mut *map };
+pub extern "C" fn rosu_pp_get_stars(map: *const Beatmap, mods: u32) -> f64 {
+    let map = unsafe { &*map };
     let diff_attrs = rosu_pp::Difficulty::new()
         .mods(mods)
         .lazer(false)
-        .calculate(&map);
+        .calculate(map);
 
     diff_attrs.stars()
 }
@@ -42,15 +42,15 @@ pub struct RosuPPSummary {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rosu_pp_get_pp_summary(
-    map: *mut Beatmap,
+    map: *const Beatmap,
     mods: u32,
     summary: *mut RosuPPSummary,
 ) {
-    let map = unsafe { &mut *map };
+    let map = unsafe { &*map };
     let diff_attrs = rosu_pp::Difficulty::new()
         .mods(mods)
         .lazer(false)
-        .calculate(&map);
+        .calculate(map);
     let max_combo = diff_attrs.max_combo();
 
     let mut perf_attrs = diff_attrs.performance().mods(mods).lazer(false).calculate();
