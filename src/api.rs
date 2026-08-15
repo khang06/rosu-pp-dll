@@ -1,6 +1,6 @@
-use rosu_pp::{Beatmap, Difficulty, GameMods};
+use rosu_pp::{Beatmap, Difficulty, GameMods, GradualPerformance};
 use rosu_pp::model::mode::GameMode;
-use rosu_pp::any::DifficultyAttributes;
+use rosu_pp::any::{DifficultyAttributes, ScoreState};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rosu_pp_parse(data: *const u8, len: u32) -> *mut Beatmap {
@@ -249,3 +249,82 @@ pub extern "C" fn rosu_pp_calc_pp_from_attrs_taiko_100(
         .calculate()
         .pp()
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_create_gradual_performance(
+    map: *const Beatmap,
+    mods: u32,
+    lazer: bool,
+) -> *mut GradualPerformance {
+    if map.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let map = unsafe { &*map };
+    let difficulty = Difficulty::new()
+        .mods(mods)
+        .lazer(lazer);
+    let gradual = GradualPerformance::new(difficulty, map);
+
+    Box::into_raw(Box::new(gradual))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_free_gradual_performance(gradual: *mut GradualPerformance) {
+    if gradual.is_null() {
+        return;
+    }
+
+    unsafe { drop(Box::from_raw(gradual)) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_gradual_performance_remaining(gradual: *const GradualPerformance) -> u32 {
+    if gradual.is_null() {
+        return 0;
+    }
+
+    unsafe { (&*gradual).len().min(u32::MAX as usize) as u32 }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_gradual_performance_advance(
+    gradual: *mut GradualPerformance,
+    advance: u32,
+    max_combo: u32,
+    n300: u32,
+    n100: u32,
+    n50: u32,
+    n_miss: u32,
+    n_katu: u32,
+    n_geki: u32,
+    pp: *mut f64,
+) -> bool {
+    if gradual.is_null() || pp.is_null() || advance == 0 {
+        return false;
+    }
+
+    let gradual = unsafe { &mut *gradual };
+    let remaining = gradual.len();
+    if remaining == 0 {
+        return false;
+    }
+
+    let advance = (advance as usize).min(remaining);
+    let mut state = ScoreState::new();
+    state.max_combo = max_combo;
+    state.n300 = n300;
+    state.n100 = n100;
+    state.n50 = n50;
+    state.misses = n_miss;
+    state.n_katu = n_katu;
+    state.n_geki = n_geki;
+
+    let Some(attrs) = gradual.nth(state, advance - 1) else {
+        return false;
+    };
+
+    unsafe { *pp = attrs.pp() };
+    true
+}
+
