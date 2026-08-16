@@ -1,6 +1,6 @@
 use rosu_pp::{Beatmap, Difficulty, GameMods, GradualPerformance};
 use rosu_pp::model::mode::GameMode;
-use rosu_pp::any::{DifficultyAttributes, ScoreState};
+use rosu_pp::any::{DifficultyAttributes, ScoreState, Strains};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rosu_pp_parse(data: *const u8, len: u32) -> *mut Beatmap {
@@ -326,5 +326,133 @@ pub extern "C" fn rosu_pp_gradual_performance_advance(
 
     unsafe { *pp = attrs.pp() };
     true
+}
+
+#[repr(C)]
+pub struct RosuStrainsResult {
+    start_time: f64,
+    section_len: f64,
+    series: Vec<Vec<f64>>,
+}
+
+fn legacy_clock_rate(mods: u32) -> f64 {
+    const DT: u32 = 1 << 6;
+    const HT: u32 = 1 << 8;
+    const NC: u32 = 1 << 9;
+
+    if mods & (DT | NC) != 0 {
+        1.5
+    } else if mods & HT != 0 {
+        0.75
+    } else {
+        1.0
+    }
+}
+
+fn strain_start_time(map: &Beatmap, section_len: f64, clock_rate: f64) -> f64 {
+    let Some(first) = map.hit_objects.first() else {
+        return 0.0;
+    };
+
+    let first_time = first.start_time / clock_rate;
+    ((first_time / section_len).ceil() * section_len - section_len) * clock_rate
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_calc_strains(map: *const Beatmap, mods: u32) -> *mut RosuStrainsResult {
+    if map.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let map = unsafe { &*map };
+    let strains = Difficulty::new()
+        .mods(mods)
+        .lazer(false)
+        .strains(map);
+
+    let raw_section_len = strains.section_len();
+    let clock_rate = legacy_clock_rate(mods);
+    let start_time = strain_start_time(map, raw_section_len, clock_rate);
+    let section_len = raw_section_len * clock_rate;
+
+    let series = match strains {
+        Strains::Osu(s) => vec![s.aim, s.aim_no_sliders, s.speed, s.flashlight],
+        Strains::Taiko(s) => vec![s.color, s.reading, s.rhythm, s.stamina, s.single_color_stamina],
+        Strains::Catch(s) => vec![s.movement],
+        Strains::Mania(s) => vec![s.strains],
+    };
+
+    Box::into_raw(Box::new(RosuStrainsResult {
+        start_time,
+        section_len,
+        series,
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_free_strains(strains: *mut RosuStrainsResult) {
+    if strains.is_null() {
+        return;
+    }
+
+    unsafe { drop(Box::from_raw(strains)) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_strains_start_time(strains: *const RosuStrainsResult) -> f64 {
+    if strains.is_null() {
+        return 0.0;
+    }
+
+    unsafe { (&*strains).start_time }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_strains_section_len(strains: *const RosuStrainsResult) -> f64 {
+    if strains.is_null() {
+        return 0.0;
+    }
+
+    unsafe { (&*strains).section_len }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_strains_series_count(strains: *const RosuStrainsResult) -> u32 {
+    if strains.is_null() {
+        return 0;
+    }
+
+    unsafe { (&*strains).series.len().min(u32::MAX as usize) as u32 }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_strains_series_len(strains: *const RosuStrainsResult, series: u32) -> u32 {
+    if strains.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        (&*strains)
+            .series
+            .get(series as usize)
+            .map_or(0, |values| values.len().min(u32::MAX as usize) as u32)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rosu_pp_strains_series_values(
+    strains: *const RosuStrainsResult,
+    series: u32,
+) -> *const f64 {
+    if strains.is_null() {
+        return core::ptr::null();
+    }
+
+    unsafe {
+        (&*strains)
+            .series
+            .get(series as usize)
+            .map_or(core::ptr::null(), |values| values.as_ptr())
+    }
 }
 
